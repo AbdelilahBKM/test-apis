@@ -1,35 +1,27 @@
 const express = require('express');
-const axios = require('axios');
+
+require('dotenv').config();
+
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 const app = express();
 const PORT = 8000;
 
-// Middleware to parse JSON
 app.use(express.json());
 
 app.get('/', (req, res) => {
-    res.send("hello world");
+  res.send("hello world");
 });
 
-// Simple route to test the API
 app.post('/test-api', async (req, res) => {
   try {
-    const userMessage = req.body.message || 'Hello!'; // Default message if none provided
-    const geminiApiKey = 'your_gemini_api_key'; // Replace with your Gemini API key
-    
-    // Replace with the actual Gemini API endpoint
-    const apiUrl = 'https://api.gemini.com/v1/chat'; 
-
-    // Make a request to the Gemini API
-    const response = await axios.post(apiUrl, {
-      input: userMessage,
-      api_key: geminiApiKey
-    });
-
-    // Send the API response back to the client
+    const result = await model.generateContent("Hello world!");
     res.json({
-      response: response.data.output
+      response: result.response.text()
     });
+
   } catch (error) {
     console.error('Error calling Gemini API:', error);
     res.status(500).json({
@@ -38,7 +30,54 @@ app.post('/test-api', async (req, res) => {
   }
 });
 
-// Start the server
+app.post('/chat', async (req, res) => {
+  try {
+    const { prompt } = req.body;
+
+    // Validate prompt input
+    if (!prompt || typeof prompt !== 'string') {
+      return res.status(400).json({ error: 'Prompt is required and must be a string.' });
+    }
+
+    // Initialize chat session with history
+    const chat = model.startChat({
+      history: [
+        {
+          role: "user",
+          parts: [{ text: "Hello, how are you?" }]
+        },
+        {
+          role: "model",
+          parts: [{ text: "I'm doing great! How can I assist you today?" }]
+        },
+        {
+          role: "user",
+          parts: [{ text: "What should I cook today for dinner?" }]
+        },
+        {
+          role: "model",
+          parts: [{ text: "Pasta with pesto and grilled vegetables" }]
+        }
+      ]
+    });
+
+    // Send the new message
+    const result = await chat.sendMessage([{ text: prompt }]);
+    res.json({
+      response: result.response.text()
+    });
+
+  } catch (error) {
+    console.error('Error calling Gemini API:', error);
+    res.status(500).json({
+      error: 'An error occurred while fetching the API response.'
+    });
+  }
+});
+
+
+
+
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
